@@ -68,17 +68,55 @@ public class StepDetectionManager {
      * Set the vertical acceleration value for step detection
      * @param threshold The vertical acceleration threshold value
      */
-    public void setVertAccThreshold(float threshold) {
+    public void setVertAccThreshold(double threshold) {
         if (this.isConnectedToService()) {
             Message setVertThresholdMsg =
                     Message.obtain(null, Constants.SET_VERT_ACC_THRESHOLD_MSG);
             Bundle b = new Bundle();
-            b.putFloat(Constants.VERT_THRESHOLD_KEY, threshold);
+            b.putDouble(Constants.VERT_THRESHOLD_KEY, threshold);
             setVertThresholdMsg.setData(b);
             try {
                 this.serviceMessenger.send(setVertThresholdMsg);
             } catch (RemoteException e) {
-                Log.e(TAG, "Error sending start step detection message to service.");
+                Log.e(TAG, "Error sending set vert acc threshold message to service.");
+            }
+        }
+    }
+
+    /**
+     * Set the horizontal acceleration value for step detection
+     * @param threshold The horizontal acceleration threshold value
+     */
+    public void setHoriAccThreshold(double threshold) {
+        if (this.isConnectedToService()) {
+            Message setHoriThresholdMsg =
+                    Message.obtain(null, Constants.SET_HORI_ACC_THRESHOLD_MSG);
+            Bundle b = new Bundle();
+            b.putDouble(Constants.HORI_THRESHOLD_KEY, threshold);
+            setHoriThresholdMsg.setData(b);
+            try {
+                this.serviceMessenger.send(setHoriThresholdMsg);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Error sending set hori acc threshold message to service.");
+            }
+        }
+    }
+
+    /**
+     * Set the step time threshold value for step detection
+     * @param threshold The step time threshold value
+     */
+    public void setStepTimeThreshold(long threshold) {
+        if (this.isConnectedToService()) {
+            Message setStepTimeThresholdMsg =
+                    Message.obtain(null, Constants.SET_STEP_TIME_THRESHOLD_MSG);
+            Bundle b = new Bundle();
+            b.putLong(Constants.STEP_TIME_THRESHOLD_KEY, threshold);
+            setStepTimeThresholdMsg.setData(b);
+            try {
+                this.serviceMessenger.send(setStepTimeThresholdMsg);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Error sending set step time threshold message to service.");
             }
         }
     }
@@ -140,6 +178,7 @@ public class StepDetectionManager {
             switch(msg.what) {
                 case Constants.STEP_DETECTED_MSG:
                     if(StepDetectionManager.this.stepListener != null) {
+                        msg.getData().setClassLoader(Step.class.getClassLoader());
                         Step step = msg.getData().getParcelable(Constants.STEP_RESULT_KEY);
                         StepDetectionManager.this.stepListener.onStep(step);
                     }

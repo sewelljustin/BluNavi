@@ -50,7 +50,7 @@ public class StepDetectionService extends Service implements SensorEventListener
             case Sensor.TYPE_LINEAR_ACCELERATION:
 //                checkData(event.values);
 
-                this.stepDetector.add(event.values);
+                this.stepDetector.check(event.values);
         }
     }
 
@@ -112,8 +112,17 @@ public class StepDetectionService extends Service implements SensorEventListener
                     StepDetectionService.this.startDetection();
                     break;
                 case Constants.SET_VERT_ACC_THRESHOLD_MSG:
-                    double threshold = msg.getData().getFloat(Constants.VERT_THRESHOLD_KEY);
-                    StepDetectionService.this.stepDetector.setVertAccThreshold(threshold);
+                    double vertAccThreshold = msg.getData().getDouble(Constants.VERT_THRESHOLD_KEY);
+                    StepDetectionService.this.stepDetector.setVertAccThreshold(vertAccThreshold);
+                    break;
+                case Constants.SET_HORI_ACC_THRESHOLD_MSG:
+                    double horiAccThreshold = msg.getData().getDouble(Constants.HORI_THRESHOLD_KEY);
+                    StepDetectionService.this.stepDetector.setHoriAccThreshold(horiAccThreshold);
+                    break;
+                case Constants.SET_STEP_TIME_THRESHOLD_MSG:
+                    long stepTimeThreshold = msg.getData().getLong(Constants.STEP_TIME_THRESHOLD_KEY);
+                    StepDetectionService.this.stepDetector.setStepTimeThreshold(stepTimeThreshold);
+                    break;
                 default:
                     break;
             }

@@ -3,6 +3,7 @@ package com.usfreu2016.blunavi.stepdetection;
 
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.os.Parcelable.Creator;
 
 import java.util.Calendar;
 
@@ -10,6 +11,20 @@ public class Step implements Parcelable{
 
     private double stepLength;
     private long timeStamp;
+    public static final Creator<Step> CREATOR = new Creator() {
+        @Override
+        public Step createFromParcel(Parcel source) {
+            ClassLoader classLoader = this.getClass().getClassLoader();
+            double stepLength = source.readDouble();
+            long timeStamp = source.readLong();
+            return new Step(stepLength, timeStamp);
+        }
+
+        @Override
+        public Step[] newArray(int size) {
+            return new Step[size];
+        }
+    };
 
     public Step() {
         this.stepLength = 0;
@@ -42,17 +57,6 @@ public class Step implements Parcelable{
         dest.writeLong(this.timeStamp);
     }
 
-    public static final Parcelable.Creator<Step> CREATOR = new Parcelable.Creator<Step>() {
-        @Override
-        public Step createFromParcel(Parcel source) {
-            return null;
-        }
-
-        @Override
-        public Step[] newArray(int size) {
-            return new Step[0];
-        }
-    };
 
     public long getTimeStamp() {
         return this.timeStamp;

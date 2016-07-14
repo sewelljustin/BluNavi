@@ -26,7 +26,9 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    final float VERT_ACC_THRESHOLD = 3.5f;
+    final double VERT_ACC_THRESHOLD = 2.0;
+    final double HORI_ACC_THRESHOLD = 2.0;
+    final long STEP_TIME_THRESHOLD = 500;
 
     /** Eddystone scanning references*/
     BeaconManager beaconManager;
@@ -74,7 +76,6 @@ public class MainActivity extends AppCompatActivity {
 
         /** Set up references for step detection */
         stepDetectionManager = new StepDetectionManager(getApplicationContext());
-        stepDetectionManager.setVertAccThreshold(VERT_ACC_THRESHOLD);
 
         /** Set listeners */
         startButton.setOnClickListener(new View.OnClickListener() {
@@ -83,6 +84,9 @@ public class MainActivity extends AppCompatActivity {
                 if (beaconManagerServiceReady && stepDetectionManagerServiceReady) {
                     beaconManager.startEddystoneScanning();
                     stepDetectionManager.startStepDetection();
+                    stepDetectionManager.setVertAccThreshold(VERT_ACC_THRESHOLD);
+                    stepDetectionManager.setHoriAccThreshold(HORI_ACC_THRESHOLD);
+                    stepDetectionManager.setStepTimeThreshold(STEP_TIME_THRESHOLD);
                 }
                 else {
                     Toast.makeText(MainActivity.this, "Try again.", Toast.LENGTH_SHORT).show();
