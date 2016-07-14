@@ -1,13 +1,16 @@
-package com.usfreu2016.blunavi1_dv10;
+package com.usfreu2016.blunavi;
 
-import android.hardware.SensorManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import com.estimote.sdk.BeaconManager;
 import com.estimote.sdk.eddystone.Eddystone;
+import com.usfreu2016.blunavi.stepdetection.Step;
+import com.usfreu2016.blunavi.stepdetection.StepDetectionManager;
 
 import org.apache.commons.math3.filter.DefaultMeasurementModel;
 import org.apache.commons.math3.filter.DefaultProcessModel;
@@ -23,14 +26,18 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
+    final float VERT_ACC_THRESHOLD = 3.5f;
+
     /** Eddystone scanning references*/
-    private BeaconManager beaconManager;
+    BeaconManager beaconManager;
     String scanId;
     boolean scanning;
-    boolean serviceReady;
+    boolean beaconManagerServiceReady;
 
     /** Step detection and length estimation references */
-    SensorManager sensorManager;
+    StepDetectionManager stepDetectionManager;
+    int numberOfSteps = 0;
+    boolean stepDetectionManagerServiceReady;
 
     /** Kalman Filter references */
     final double PROCESS_NOISE_VARIANCE = 0.0064;
@@ -40,6 +47,8 @@ public class MainActivity extends AppCompatActivity {
 
     /** Views */
     Button startButton;
+    TextView stepsTextView;
+    TextView stepLengthTextView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,16 +63,30 @@ public class MainActivity extends AppCompatActivity {
 
         /** Set up Views */
         startButton = (Button) findViewById(R.id.startButton);
+        stepsTextView = (TextView) findViewById(R.id.stepsTextView);
+        stepsTextView.setText(String.valueOf(numberOfSteps));
+        stepLengthTextView = (TextView) findViewById(R.id.stepLengthTextView);
+        stepLengthTextView.setText(String.valueOf(0.0));
 
         /** Set up references for Eddystone scanning */
         beaconManager = new BeaconManager(getApplicationContext());
         beaconManager.setForegroundScanPeriod(500,0);
 
+        /** Set up references for step detection */
+        stepDetectionManager = new StepDetectionManager(getApplicationContext());
+        stepDetectionManager.setVertAccThreshold(VERT_ACC_THRESHOLD);
+
         /** Set listeners */
         startButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                beaconManager.startEddystoneScanning();
+                if (beaconManagerServiceReady && stepDetectionManagerServiceReady) {
+                    beaconManager.startEddystoneScanning();
+                    stepDetectionManager.startStepDetection();
+                }
+                else {
+                    Toast.makeText(MainActivity.this, "Try again.", Toast.LENGTH_SHORT).show();
+                }
             }
         });
         beaconManager.setEddystoneListener(new BeaconManager.EddystoneListener() {
@@ -72,12 +95,28 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
+        stepDetectionManager.setStepListener(new StepDetectionManager.StepListener() {
+            @Override
+            public void onStep(Step step) {
+                numberOfSteps++;
+                stepsTextView.setText(String.valueOf(numberOfSteps));
+                stepLengthTextView.setText(String.valueOf(step.getStepLength()));
+            }
+        });
 
         /** Connect beaconManager to its service */
         beaconManager.connect(new BeaconManager.ServiceReadyCallback() {
             @Override
             public void onServiceReady() {
-                serviceReady = true;
+                beaconManagerServiceReady = true;
+            }
+        });
+
+        /** Connect stepDetectionManager to its service */
+        stepDetectionManager.connect(new StepDetectionManager.ServiceReadyCallback() {
+            @Override
+            public void onServiceReady() {
+                stepDetectionManagerServiceReady = true;
             }
         });
     }
