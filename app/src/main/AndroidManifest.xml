@@ -9,7 +9,7 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <service
-            android:name=".stepdetection.StepDetectionService"
+            android:name=".deadreckoning.DeadReckoningService"
             android:process=":Remote" />
         <activity android:name="com.usfreu2016.blunavi.MainActivity">
             <intent-filter>
