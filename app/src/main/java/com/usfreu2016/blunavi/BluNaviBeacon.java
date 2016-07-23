@@ -5,10 +5,10 @@ public class BluNaviBeacon {
 
     private String phyID;
     private String macAddress;
-    private int xPos;
-    private int yPos;
+    private double xPos;
+    private double yPos;
 
-    public BluNaviBeacon(String id, String macAddress, int x, int y) {
+    public BluNaviBeacon(String id, String macAddress, double x, double y) {
         this.phyID = id;
         this.macAddress = macAddress;
         this.xPos = x;
@@ -23,8 +23,8 @@ public class BluNaviBeacon {
         return this.macAddress;
     }
 
-    public int[] getCoords() {
-        int[] coords = {xPos, yPos};
+    public double[] getCoords() {
+        double[] coords = {xPos, yPos};
         return coords;
     }
 

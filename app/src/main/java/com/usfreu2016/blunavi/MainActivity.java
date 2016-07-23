@@ -1,5 +1,8 @@
 package com.usfreu2016.blunavi;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -28,18 +31,38 @@ import org.apache.commons.math3.linear.ArrayRealVector;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity {
 
     final String TAG = "MainActivity";
 
+    final int REQUEST_CODE_ASK_PERMISSIONS = 1;
+
+    final long TIMER_DELAY = 500;
+
     final double VERT_ACC_THRESHOLD = 2.0;
     final double HORI_ACC_THRESHOLD = 1.0;
     final long STEP_TIME_THRESHOLD = 500;
 
+    final double BEARING_THRESHOLD = 10;
+
+    final String dirName = "BluNavi Data";
+
+
+    /** Timer and task for recording position */
+    Timer timer;
+    TimerTask task;
 
     /** Eddystone scanning references*/
     BeaconManager beaconManager;
@@ -47,12 +70,8 @@ public class MainActivity extends AppCompatActivity {
     boolean scanning;
     boolean beaconManagerServiceReady;
 
-    /** Comparator for sorting Eddystones */
-    final EddystoneComparator eddystoneComparator = new EddystoneComparator();
-
     /** Dead reckoning references */
     DeadReckoningManager deadReckoningManager;
-    int numberOfSteps = 0;
     int bearing;
     double radBearing; // bearing expressed in radians
     boolean deadReckoningManagerServiceReady;
@@ -64,6 +83,10 @@ public class MainActivity extends AppCompatActivity {
     final double STATE_VARIANCE = 500.0;
     ExtendedKalmanFilter filter;
 
+    /** Used to write the two files */
+    BufferedWriter positionWriter;
+    BufferedWriter timeWriter;
+
     /** Estimated position */
     double xHat;
     double yHat;
@@ -71,31 +94,47 @@ public class MainActivity extends AppCompatActivity {
     /** Views */
     Button startButton;
     Button setInitialOrientationButton;
-    TextView stepsTextView;
-    TextView stepLengthTextView;
-    TextView orientationTextView;
-    TextView positionTextView;
-    TextView focusedBeaconTextView;
+    Button recordTimeButton;
+    TextView dataTextView;
 
-    /** BAD CODE WILL CHANGE LATER */
+    boolean recordingData;
+
     Eddystone focusedBeacon;
 
-    //J8Afaf (-10, 0)
-    BluNaviBeacon beacon1 = new BluNaviBeacon("J8Afaf", "D5:00:25:D5:22:A9", -10, 0);
+    //nsk4UG
+    BluNaviBeacon beacon1 = new BluNaviBeacon("nsk4UG", "FF:48:85:91:B0:0D", 0, -1.22);
 
-    //nsk4UG (0, 0)
-    BluNaviBeacon beacon2 = new BluNaviBeacon("nsk4UG", "FF:48:85:91:B0:0D", 0, 0);
+    //J8Afaf
+    BluNaviBeacon beacon2 = new BluNaviBeacon("J8Afaf", "D5:00:25:D5:22:A9", 0.61, 7.32);
+
+    //4L6DDN
+    BluNaviBeacon beacon3 = new BluNaviBeacon("4L6DDN", "CB:37:96:6C:06:E2", 0, 17.07);
+
+    //zPtPxR
+    BluNaviBeacon beacon4 = new BluNaviBeacon("zPtPxR", "D1:07:0C:8F:45:90", -13.41, -1.22);
+
+    //kNYXCP
+    BluNaviBeacon beacon5 = new BluNaviBeacon("kNYXCP", "CD:13:1D:A6:C4:2E", -26.82, -1.22);
+
+    //UDbczx
+    BluNaviBeacon beacon6 = new BluNaviBeacon("UDbczx", "F3:EE:D0:01:5B:AE", -13.41, 17.07);
+
+    //5tXSCU
+    BluNaviBeacon beacon7 = new BluNaviBeacon("5tXSCU", "E7:4E:95:C8:62:A3", -27.43, 16.46);
+
+    //S3aP63
+    BluNaviBeacon beacon8 = new BluNaviBeacon("S3aP63", "DE:38:78:85:1C:6D", -27.43, 7.32);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        timer = new Timer();
         xHat = 0;
         yHat = 0;
         previousStepLength = 0.75;
-//        Log.d(TAG, "bearing: " + Utils.computeBearing(0, 0, 0, 0));
-//        Log.d(TAG, "atan2: " + Math.atan2(0.05967668696, -0.00681261948) * 57.2958);
+        recordingData = false;
         init();
         buildFilter();
     }
@@ -139,7 +178,13 @@ public class MainActivity extends AppCompatActivity {
     private void updatePosition() {
         xHat = filter.getStateEstimation()[0];
         yHat = filter.getStateEstimation()[1];
-        positionTextView.setText("X: " + xHat + " Y: " + yHat);
+    }
+
+    private boolean validBearing(int bearing) {
+        if (Math.abs(this.bearing - bearing) >= BEARING_THRESHOLD) {
+            return true;
+        }
+        return false;
     }
 
     private void checkFocusedBeacon(List<Eddystone> list) {
@@ -149,19 +194,62 @@ public class MainActivity extends AppCompatActivity {
         for (Eddystone eddystone : list) {
 
             if (eddystone.macAddress.equals(beacon1.getMacAddress())) {
-                int bY = beacon1.getCoords()[1];
-                int bX = beacon1.getCoords()[0];
-                if ((Utils.computeBearing(yHat, xHat, bY, bX)) == bearing) {
+                double bY = beacon1.getCoords()[1];
+                double bX = beacon1.getCoords()[0];
+                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
                     validOptions.add(eddystone);
                 }
             }
             else if (eddystone.macAddress.equals(beacon2.getMacAddress())) {
-                int bY = beacon2.getCoords()[1];
-                int bX = beacon2.getCoords()[0];
-                if ((Utils.computeBearing(yHat, xHat, bY, bX)) == bearing) {
+                double bY = beacon2.getCoords()[1];
+                double bX = beacon2.getCoords()[0];
+                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
                     validOptions.add(eddystone);
                 }
             }
+            else if (eddystone.macAddress.equals(beacon3.getMacAddress())) {
+                double bY = beacon3.getCoords()[1];
+                double bX = beacon3.getCoords()[0];
+                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
+                    validOptions.add(eddystone);
+                }
+            }
+            else if (eddystone.macAddress.equals(beacon4.getMacAddress())) {
+                double bY = beacon4.getCoords()[1];
+                double bX = beacon4.getCoords()[0];
+                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
+                    validOptions.add(eddystone);
+                }
+            }
+            else if (eddystone.macAddress.equals(beacon5.getMacAddress())) {
+                double bY = beacon5.getCoords()[1];
+                double bX = beacon5.getCoords()[0];
+                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
+                    validOptions.add(eddystone);
+                }
+            }
+            else if (eddystone.macAddress.equals(beacon6.getMacAddress())) {
+                double bY = beacon6.getCoords()[1];
+                double bX = beacon6.getCoords()[0];
+                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
+                    validOptions.add(eddystone);
+                }
+            }
+            else if (eddystone.macAddress.equals(beacon7.getMacAddress())) {
+                double bY = beacon7.getCoords()[1];
+                double bX = beacon7.getCoords()[0];
+                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
+                    validOptions.add(eddystone);
+                }
+            }
+            else if (eddystone.macAddress.equals(beacon8.getMacAddress())) {
+                double bY = beacon8.getCoords()[1];
+                double bX = beacon8.getCoords()[0];
+                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
+                    validOptions.add(eddystone);
+                }
+            }
+
         }
 
         // if no valid options, then set focused beacon to closest beacon
@@ -172,8 +260,6 @@ public class MainActivity extends AppCompatActivity {
         else {
             focusedBeacon = validOptions.get(0);
         }
-
-        focusedBeaconTextView.setText(focusedBeacon.macAddress.toStandardString());
 
     }
 
@@ -198,15 +284,8 @@ public class MainActivity extends AppCompatActivity {
         /** Set up Views */
         startButton = (Button) findViewById(R.id.startButton);
         setInitialOrientationButton = (Button) findViewById(R.id.setInitialOrientationButton);
-        stepsTextView = (TextView) findViewById(R.id.stepsTextView);
-        stepsTextView.setText(String.valueOf(numberOfSteps));
-        stepLengthTextView = (TextView) findViewById(R.id.stepLengthTextView);
-        stepLengthTextView.setText(String.valueOf(0.0));
-        orientationTextView = (TextView) findViewById(R.id.orientationTextView);
-        orientationTextView.setText("0");
-        positionTextView = (TextView) findViewById(R.id.positionTextView);
-        positionTextView.setText("X: 0, Y: 0");
-        focusedBeaconTextView = (TextView) findViewById(R.id.focusedBeaconTextView);
+        recordTimeButton = (Button) findViewById(R.id.recordTimeButton);
+        dataTextView = (TextView) findViewById(R.id.dataTextView);
 
         /** Set up references for Eddystone scanning */
         beaconManager = new BeaconManager(getApplicationContext());
@@ -221,23 +300,55 @@ public class MainActivity extends AppCompatActivity {
         startButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (beaconManagerServiceReady && deadReckoningManagerServiceReady) {
-                    beaconManager.startEddystoneScanning();
-                    deadReckoningManager.startStepDetection();
-                    deadReckoningManager.setVertAccThreshold(VERT_ACC_THRESHOLD);
-                    deadReckoningManager.setHoriAccThreshold(HORI_ACC_THRESHOLD);
-                    deadReckoningManager.setStepTimeThreshold(STEP_TIME_THRESHOLD);
-                    deadReckoningManager.startOrientationTracking();
+                if (startButton.getText().toString().equals("Start")) {
+                    if (beaconManagerServiceReady && deadReckoningManagerServiceReady) {
+
+                        /** Initial Position */
+                        xHat = 0;
+                        yHat = 0;
+                        buildFilter();
+
+                        openFileWriters();
+                        task = new TimerTask() {
+                            @Override
+                            public void run() {
+                                if (recordingData) {
+                                    recordPosition();
+                                }
+                            }
+                        };
+                        timer.schedule(task, 0, TIMER_DELAY);
+
+                        beaconManager.startEddystoneScanning();
+                        deadReckoningManager.startStepDetection();
+                        deadReckoningManager.setVertAccThreshold(VERT_ACC_THRESHOLD);
+                        deadReckoningManager.setHoriAccThreshold(HORI_ACC_THRESHOLD);
+                        deadReckoningManager.setStepTimeThreshold(STEP_TIME_THRESHOLD);
+                        deadReckoningManager.startOrientationTracking();
+                        startButton.setText("Stop");
+                    } else {
+                        Toast.makeText(MainActivity.this, "Try again.", Toast.LENGTH_SHORT).show();
+                    }
                 }
                 else {
-                    Toast.makeText(MainActivity.this, "Try again.", Toast.LENGTH_SHORT).show();
+                    closeFileWriters();
+                    task.cancel();
+                    startButton.setText("Start");
+                    recordingData = false;
                 }
             }
         });
         setInitialOrientationButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                recordingData = true;
                 deadReckoningManager.setInitialOrientation();
+            }
+        });
+        recordTimeButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                recordTime();
             }
         });
         beaconManager.setEddystoneListener(new BeaconManager.EddystoneListener() {
@@ -261,9 +372,6 @@ public class MainActivity extends AppCompatActivity {
                 z = getStepMeasurementVector(step.getStepLength());
                 filter.correct(z);
                 updatePosition();
-                numberOfSteps++;
-                stepsTextView.setText(String.valueOf(numberOfSteps));
-                stepLengthTextView.setText(String.valueOf(step.getStepLength()));
             }
         });
         deadReckoningManager.setOrientationListener(new DeadReckoningManager.OrientationListener() {
@@ -272,7 +380,6 @@ public class MainActivity extends AppCompatActivity {
                 bearing = angle;
                 radBearing = (Math.PI * bearing) / 180;
                 filter.setRadBearing(radBearing);
-                orientationTextView.setText(String.valueOf(angle));
             }
         });
 
@@ -356,6 +463,104 @@ public class MainActivity extends AppCompatActivity {
 
         /** Build Kalman Filter */
         filter = new ExtendedKalmanFilter(process, measurement);
+    }
+
+    private void recordPosition() {
+        if (recordingData) {
+            long time = Calendar.getInstance().getTimeInMillis();
+            final String data = String.format("%.2f,%.2f,%d,%d", xHat, yHat, bearing, time);
+            try {
+                positionWriter.append(data);
+                positionWriter.append("\n");
+            } catch (FileNotFoundException e) {
+                Log.e("Error", "File not found exception");
+            } catch (IOException e) {
+                Log.e("Error", "IOException");
+            }
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    dataTextView.setText(data);
+                }
+            });
+        }
+    }
+
+    private void recordTime() {
+        if (recordingData) {
+            try {
+                timeWriter.append(String.valueOf(Calendar.getInstance().getTimeInMillis()));
+                timeWriter.append("\n");
+            } catch (FileNotFoundException e) {
+                Log.e("Error", "File not found exception");
+            } catch (IOException e) {
+                Log.e("Error", "IOException");
+            }
+        }
+    }
+
+    private void openFileWriters() {
+        /** Check for write permissions */
+        checkPermissions();
+
+        /** Create the files */
+        File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), dirName);
+        if (!dir.exists()) {
+            if (!dir.mkdirs()) {
+                Log.e("Error", "Directory not created.");
+            }
+        }
+        File positionFile = new File(dir, "position.csv");
+        File timeFile = new File(dir, "time.csv");
+
+        /** Set up the writers */
+        try {
+            FileWriter writer1 = new FileWriter(positionFile, true);
+            FileWriter writer2 = new FileWriter(timeFile, true);
+            positionWriter = new BufferedWriter(writer1);
+            timeWriter = new BufferedWriter(writer2);
+        } catch (FileNotFoundException e) {
+            Log.e("Error", "File not found exception");
+        } catch (IOException e) {
+            Log.e("Error", "IOException");
+        }
+    }
+
+    private void closeFileWriters() {
+        /** close the writers */
+        try {
+            positionWriter.close();
+            timeWriter.close();
+        } catch (FileNotFoundException e) {
+            Log.e("Error", "File not found exception");
+        } catch (IOException e) {
+            Log.e("Error", "IOException");
+        }
+    }
+
+    private void checkPermissions() {
+        int hasWriteExternalStoragePermission = checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        if (hasWriteExternalStoragePermission != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    REQUEST_CODE_ASK_PERMISSIONS);
+            return;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_CODE_ASK_PERMISSIONS:
+                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+                }
+                else {
+                    Toast.makeText(this, "Permissions Denied", Toast.LENGTH_SHORT).show();
+                }
+                break;
+            default:
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
     }
 
 }
