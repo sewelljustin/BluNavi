@@ -23,9 +23,37 @@ public class BluNaviBeacon {
         return this.macAddress;
     }
 
+    public double getXPos() {
+        return this.xPos;
+    }
+
+    public double getYPos() {
+        return this.yPos;
+    }
+
     public double[] getCoords() {
         double[] coords = {xPos, yPos};
         return coords;
+    }
+
+    public void setId(String id) {
+        this.phyID = id;
+    }
+
+    public void setMacAddress(String mac) {
+        this.macAddress = mac;
+    }
+
+    public void setXPos(double x) {
+        this.xPos = x;
+    }
+
+    public void setYPos(double y) {
+        this.yPos = y;
+    }
+
+    public String toString() {
+        return "MAC: " + this.macAddress + " x: " + this.xPos + " y: " + yPos;
     }
 
 }

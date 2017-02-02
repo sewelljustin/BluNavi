@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">BluNavi</string>
+    <string name="beacon_mac_set">SavedBeaconMacs</string>
 </resources>

@@ -1,11 +1,17 @@
 package com.usfreu2016.blunavi;
 
 import android.Manifest;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Environment;
+import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -14,16 +20,12 @@ import android.widget.Toast;
 import com.estimote.sdk.BeaconManager;
 import com.estimote.sdk.SystemRequirementsChecker;
 import com.estimote.sdk.eddystone.Eddystone;
-import com.estimote.sdk.repackaged.okhttp_v2_2_0.com.squareup.okhttp.internal.Util;
 import com.usfreu2016.blunavi.deadreckoning.DeadReckoningManager;
 import com.usfreu2016.blunavi.deadreckoning.Step;
 import com.usfreu2016.blunavi.extendedkalmanfilter.ExtendedKalmanFilter;
-import com.usfreu2016.blunavi.extendedkalmanfilter.ExtendedMeasurementModel;
-import com.usfreu2016.blunavi.extendedkalmanfilter.ExtendedProcessModel;
 
 import org.apache.commons.math3.filter.DefaultMeasurementModel;
 import org.apache.commons.math3.filter.DefaultProcessModel;
-import org.apache.commons.math3.filter.KalmanFilter;
 import org.apache.commons.math3.filter.MeasurementModel;
 import org.apache.commons.math3.filter.ProcessModel;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
@@ -37,8 +39,9 @@ import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -101,29 +104,8 @@ public class MainActivity extends AppCompatActivity {
 
     Eddystone focusedBeacon;
 
-    //nsk4UG
-    BluNaviBeacon beacon1 = new BluNaviBeacon("nsk4UG", "FF:48:85:91:B0:0D", 0, -1.22);
-
-    //J8Afaf
-    BluNaviBeacon beacon2 = new BluNaviBeacon("J8Afaf", "D5:00:25:D5:22:A9", 0.61, 7.32);
-
-    //4L6DDN
-    BluNaviBeacon beacon3 = new BluNaviBeacon("4L6DDN", "CB:37:96:6C:06:E2", 0, 17.07);
-
-    //zPtPxR
-    BluNaviBeacon beacon4 = new BluNaviBeacon("zPtPxR", "D1:07:0C:8F:45:90", -13.41, -1.22);
-
-    //kNYXCP
-    BluNaviBeacon beacon5 = new BluNaviBeacon("kNYXCP", "CD:13:1D:A6:C4:2E", -26.82, -1.22);
-
-    //UDbczx
-    BluNaviBeacon beacon6 = new BluNaviBeacon("UDbczx", "F3:EE:D0:01:5B:AE", -13.41, 17.07);
-
-    //5tXSCU
-    BluNaviBeacon beacon7 = new BluNaviBeacon("5tXSCU", "E7:4E:95:C8:62:A3", -27.43, 16.46);
-
-    //S3aP63
-    BluNaviBeacon beacon8 = new BluNaviBeacon("S3aP63", "DE:38:78:85:1C:6D", -27.43, 7.32);
+    // HashMap of saved beacons
+    HashMap<String /*Mac address*/, BluNaviBeacon> beaconHashMap;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,6 +128,9 @@ public class MainActivity extends AppCompatActivity {
         if (beaconManagerServiceReady && !scanning) {
             startScanning();
         }
+
+        // update shared preferences
+        buildBeaconMap();
     }
 
     @Override
@@ -154,6 +139,26 @@ public class MainActivity extends AppCompatActivity {
         if (scanning) {
             stopScanning();
         }
+
+        // update shared preferences
+
+        SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        SharedPreferences.Editor editor = settings.edit();
+
+        // add beacon to shared preferences file
+        HashSet<String> beacon_mac_hashset = (HashSet<String>) settings.getStringSet(getString(R.string.beacon_mac_set), new HashSet<String>());
+
+        for (String macAddress : beaconHashMap.keySet()) {
+            final BluNaviBeacon beacon = beaconHashMap.get(macAddress);
+            editor.putString(macAddress + "_id", beacon.getId());
+            editor.putString(macAddress + "_mac", beacon.getMacAddress());
+            editor.putFloat(macAddress + "_x", (float) beacon.getXPos());
+            editor.putFloat(macAddress + "_y", (float) beacon.getYPos());
+            beacon_mac_hashset.add(macAddress);
+        }
+
+        editor.putStringSet(getString(R.string.beacon_mac_set), beacon_mac_hashset);
+        editor.commit();
     }
 
     @Override
@@ -191,75 +196,26 @@ public class MainActivity extends AppCompatActivity {
 
         // create list of beacons that are in view of the device
         List<Eddystone> validOptions = new ArrayList<>();
+
         for (Eddystone eddystone : list) {
 
-            if (eddystone.macAddress.equals(beacon1.getMacAddress())) {
-                double bY = beacon1.getCoords()[1];
-                double bX = beacon1.getCoords()[0];
-                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
-                    validOptions.add(eddystone);
-                }
-            }
-            else if (eddystone.macAddress.equals(beacon2.getMacAddress())) {
-                double bY = beacon2.getCoords()[1];
-                double bX = beacon2.getCoords()[0];
-                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
-                    validOptions.add(eddystone);
-                }
-            }
-            else if (eddystone.macAddress.equals(beacon3.getMacAddress())) {
-                double bY = beacon3.getCoords()[1];
-                double bX = beacon3.getCoords()[0];
-                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
-                    validOptions.add(eddystone);
-                }
-            }
-            else if (eddystone.macAddress.equals(beacon4.getMacAddress())) {
-                double bY = beacon4.getCoords()[1];
-                double bX = beacon4.getCoords()[0];
-                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
-                    validOptions.add(eddystone);
-                }
-            }
-            else if (eddystone.macAddress.equals(beacon5.getMacAddress())) {
-                double bY = beacon5.getCoords()[1];
-                double bX = beacon5.getCoords()[0];
-                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
-                    validOptions.add(eddystone);
-                }
-            }
-            else if (eddystone.macAddress.equals(beacon6.getMacAddress())) {
-                double bY = beacon6.getCoords()[1];
-                double bX = beacon6.getCoords()[0];
-                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
-                    validOptions.add(eddystone);
-                }
-            }
-            else if (eddystone.macAddress.equals(beacon7.getMacAddress())) {
-                double bY = beacon7.getCoords()[1];
-                double bX = beacon7.getCoords()[0];
-                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
-                    validOptions.add(eddystone);
-                }
-            }
-            else if (eddystone.macAddress.equals(beacon8.getMacAddress())) {
-                double bY = beacon8.getCoords()[1];
-                double bX = beacon8.getCoords()[0];
-                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
-                    validOptions.add(eddystone);
-                }
-            }
+            String macAddress = eddystone.macAddress.toStandardString();
 
+            if (beaconHashMap.containsKey(macAddress)) {
+                final BluNaviBeacon beacon = beaconHashMap.get(macAddress);
+                double bY = beacon.getYPos();
+                double bX = beacon.getXPos();
+
+                // check bearing of beacon
+                if (validBearing((Utils.computeBearing(yHat, xHat, bY, bX)))) {
+                    validOptions.add(eddystone);
+                }
+            }
         }
 
         // if no valid options, then set focused beacon to closest beacon
         // list is sorted by rssi values
-        if (validOptions.size() == 0) {
-            focusedBeacon = list.get(0);
-        }
-        else {
-            focusedBeacon = validOptions.get(0);
-        }
+        focusedBeacon = (validOptions.size() == 0) ? list.get(0) : validOptions.get(0);
 
     }
 
@@ -280,6 +236,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void init() {
+
+        /** Build beaconHashMap */
+        beaconHashMap = new HashMap<>();
 
         /** Set up Views */
         startButton = (Button) findViewById(R.id.startButton);
@@ -355,6 +314,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onEddystonesFound(List<Eddystone> list) {
                 if (list.size() > 0) {
+                    checkSharedPreferences(list);
                     checkFocusedBeacon(list);
                     filter.predict();
                     RealVector z = getBeaconMeasurementVector();
@@ -465,6 +425,46 @@ public class MainActivity extends AppCompatActivity {
         filter = new ExtendedKalmanFilter(process, measurement);
     }
 
+    private void buildBeaconMap() {
+        SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        HashSet<String> beacon_mac_hashset = (HashSet<String>) settings.getStringSet(getString(R.string.beacon_mac_set), new HashSet<String>());
+        for (String mac : beacon_mac_hashset) {
+            String beaconId = settings.getString(mac + "_id", "null");
+            String beaconMac = settings.getString(mac + "_mac", "null");
+            double beaconX = settings.getFloat(mac + "_x", 0);
+            double beaconY = settings.getFloat(mac + "_y", 0);
+            final BluNaviBeacon beacon = new BluNaviBeacon(beaconId, beaconMac, beaconX, beaconY);
+            beaconHashMap.put(mac, beacon);
+        }
+    }
+
+    // if new found beacon, add to shared preferences file
+    private void checkSharedPreferences(List<Eddystone> list) {
+
+        for (Eddystone eddystone : list) {
+
+            String macAddress = eddystone.macAddress.toStandardString();
+
+            // check if beacon is not in beaconHashMap
+            if (!beaconHashMap.containsKey(macAddress)) {
+
+                // Toast for "found new beacon"
+                Toast toast = Toast.makeText(getApplicationContext(), "New Beacon Found", Toast.LENGTH_SHORT);
+                toast.show();
+
+                // create new beacon object
+                String beacon_id = "null";
+                String beacon_mac = macAddress;
+                double beacon_x_pos = 0;
+                double beacon_y_pos = 0;
+                final BluNaviBeacon beacon = new BluNaviBeacon(beacon_id, beacon_mac, beacon_x_pos, beacon_y_pos);
+
+                // add beacon to hashmap;
+                beaconHashMap.put(beacon_mac, beacon);
+            }
+        }
+    }
+
     private void recordPosition() {
         if (recordingData) {
             long time = Calendar.getInstance().getTimeInMillis();
@@ -538,6 +538,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+    // Permissions for writing to file
     private void checkPermissions() {
         int hasWriteExternalStoragePermission = checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         if (hasWriteExternalStoragePermission != PackageManager.PERMISSION_GRANTED) {
@@ -547,6 +549,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Permissions for writing to file
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         switch (requestCode) {
@@ -562,5 +565,25 @@ public class MainActivity extends AppCompatActivity {
                 super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         }
     }
+
+    // Inflate menu
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.settings_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle item selection
+        switch (item.getItemId()) {
+            case R.id.settings:
+                startActivity(new Intent(this, SettingsActivity.class));
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
 
 }
